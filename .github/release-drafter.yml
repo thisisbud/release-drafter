@@ -1,17 +1,40 @@
-name-template: 'v$NEXT_PATCH_VERSION'
-tag-template: 'v$NEXT_PATCH_VERSION'
-template: |
-  # What's Changed
-
-  $CHANGES
 categories:
-  - title: 'New'
-    label: 'type: feature'
+  - title: 'New Features'
+    label:
+      - 'Feature'
+      - 'Feature :boom:'
+  - title: 'Improvements'
+    labels:
+      - 'enhancement'
+      - 'Improvement'
+      - 'Enhancement :tada:'
+      - 'Improvement :tada:'
   - title: 'Bug Fixes'
-    label: 'type: bug'
-  - title: 'Maintenance'
-    label: 'type: maintenance'
-  - title: 'Documentation'
-    label: 'type: docs'
-  - title: 'Dependency Updates'
-    label: 'type: dependencies'
+    labels:
+      - 'bug'
+      - 'Bug fix'
+      - 'Bug :bug:'
+      - 'Bug fix :bug:'
+      - 'Bug Fix :bug:'
+  - title: 'Breaking changes'
+    label:
+      - 'BC Break'
+      - 'BC Break :fire"'
+  - title: 'Environment Variable changes'
+    label:
+      - 'Env Change'
+      - 'Env Change :man_technologist:'
+  - title: 'External API Endpoint Changes'
+    label:
+      - 'Endpoint change'
+      - 'Endpoint change :shipit:'
+      - 'Endpoint Change :shipit:'
+  - title: 'Dependencies'
+    label: 
+      - 'dependencies'
+change-template: '- [#$NUMBER](https://github.com/thisisbud/release-drafter/pull/$NUMBER) $TITLE (@$AUTHOR)'
+tag-template: 'v$NEXT_PATCH_VERSION'
+exclude-labels:
+  - 'skip-changelog'
+template: |
+  $CHANGES
